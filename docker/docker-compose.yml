@@ -1,0 +1,176 @@
+# # version: '3.8'
+
+# services:
+#   postgres:
+#     image: postgres:latest
+#     container_name: my_postgres
+#     env_file: ./env/postgres.env
+#     environment:
+#       - POSTGRES_USER=${POSTGRES_USER}
+#       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+#       - POSTGRES_DB=${POSTGRES_DB}
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - my_network
+
+
+#   pgadmin:
+#     image: dpage/pgadmin4
+#     container_name: my_pgadmin
+#     env_file:
+#       - ./env/pgadmin.env
+#     ports:
+#       - "5050:80"
+#     depends_on:
+#       - postgres
+#     networks:
+#       - my_network
+
+# volumes:
+#   postgres_data:
+
+# networks:
+#   my_network:
+#     driver: bridge
+
+
+# version: '3.8'
+
+# services:
+#   postgres:
+#     image: postgres:latest
+#     container_name: my_postgres
+#     env_file:
+#       - ./env/postgres.env
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - my_network
+
+#   pgadmin:
+#     image: dpage/pgadmin4
+#     container_name: my_pgadmin
+#     env_file:
+#       - ./env/pgadmin.env
+#     ports:
+#       - "5050:80"
+#     depends_on:
+#       - postgres
+#     networks:
+#       - my_network
+#     volumes:
+#       - ./pg_admin_server.json:/pgadmin4/servers.json:ro
+
+#   backend:
+#     build:
+#       context: ../backend
+#       dockerfile: ../docker/backend.dockerfile
+#     container_name: my_backend
+#     env_file:
+#       - ./env/backend.env
+#     ports:
+#       - 3001:3000  
+#     depends_on:
+#       - postgres
+#     networks:
+#       - my_network
+
+#   frontend:
+#     build:
+#       context: ../frontend
+#       dockerfile: ../docker/frontend.dockerfile
+#     container_name: my_frontend
+#     env_file:
+#       - ./env/frontend.env
+#     ports:
+#       - 8080:80 
+#     depends_on:
+#       - backend
+#     networks:
+#       - my_network
+
+# volumes:
+#   postgres_data: {}
+
+# networks:
+#   my_network:
+#     driver: bridge
+
+####### Version Traefik ####################
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - my_network
+
+  postgres:
+    image: postgres:latest
+    container_name: my_postgres
+    env_file:
+      - ./env/postgres.env
+    networks:
+      - my_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: my_pgadmin
+    env_file:
+      - ./env/pgadmin.env
+    volumes:
+      - ./pg_admin_server.json:/pgadmin4/servers.json:ro
+    networks:
+      - my_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.ipssi`)"
+      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/backend.dockerfile
+    container_name: my_backend
+    env_file:
+      - ./env/backend.env
+    networks:
+      - my_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.ipssi`)"
+      - "traefik.http.services.backend.loadbalancer.server.port=3000"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/frontend.dockerfile
+    container_name: my_frontend
+    env_file:
+      - ./env/frontend.env
+    networks:
+      - my_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`app.ipssi`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+
+networks:
+  my_network:
+    driver: bridge
